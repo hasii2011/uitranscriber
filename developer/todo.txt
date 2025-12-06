@@ -1,0 +1,25 @@
+
+
+pynput dynamically loads several modules module
+
+To build my I followed the instructions at:
+
+https://py2app.readthedocs.io/en/latest/debugging.html
+
+So my build line look like this:
+
+
+python setup.py py2app --includes pynput.keyboard._darwin,pynput.mouse._darwin
+
+
+As per the above page:
+
+"If this is needed for a project on PyPI: Please file a bug on GitHub, that way we can teach py2app to do the right thing."
+
+pynput is at:
+
+https://pypi.org/project/pynput/
+
+and
+
+https://github.com/moses-palmer/pynput

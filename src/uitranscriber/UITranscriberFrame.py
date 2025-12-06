@@ -1,0 +1,209 @@
+
+from typing import List
+from typing import cast
+
+from logging import Logger
+from logging import getLogger
+
+from os import linesep as osLineSep
+
+from wx import FD_CHANGE_DIR
+from wx import FD_OVERWRITE_PROMPT
+from wx import FD_SAVE
+from wx import FileSelector
+from wx import ID_ANY
+from wx import EVT_BUTTON
+from wx import EVT_CLOSE
+from wx import BORDER_THEME
+from wx import TE_MULTILINE
+from wx import DEFAULT_FRAME_STYLE
+from wx import FRAME_FLOAT_ON_PARENT
+from wx import STB_DEFAULT_STYLE
+
+from wx import Size
+from wx import Point
+from wx import BitmapButton
+from wx import TextCtrl
+from wx import CommandEvent
+
+from wx import CallAfter as wxCallAfter
+
+from wx.lib.sized_controls import SizedFrame
+from wx.lib.sized_controls import SizedPanel
+from wx.lib.sized_controls import SizedStaticBox
+
+from pynput.mouse import Button
+from pynput.mouse import Listener as MouseListener
+from pynput.keyboard import Listener as KeyboardListener
+
+from uitranscriber.resources.stop import embeddedImage as stopImage
+from uitranscriber.resources.save import embeddedImage as saveImage
+from uitranscriber.resources.record import embeddedImage as recordImage
+
+CLICK: str = 'click'
+PRESS: str = 'keyDown'
+SCRIPT_PREAMBLE: List[str] = [
+    f'#!/usr/bin/env python{osLineSep}',
+    f'# /// script{osLineSep}'
+    f'# dependencies = ["pyautogui"]{osLineSep}'
+    f'# ///{osLineSep}'
+    f'{osLineSep}'
+    f'import pyautogui{osLineSep}'
+    f'from pyautogui import press{osLineSep}',
+    f'from pyautogui import click{osLineSep}',
+    f'{osLineSep}'
+    f'{osLineSep}'
+    f'{osLineSep}'
+    f'pyautogui.PAUSE = 0.5{osLineSep}'
+    f'{osLineSep}'
+]
+
+class UITranscriberFrame(SizedFrame):
+
+    def __init__(self):
+        self.logger: Logger = getLogger(__name__)
+
+        super().__init__(parent=None, title='UI Transcriber', size=Size(width=450, height=300), style=self._getFrameStyle())
+
+        self.SetPosition(pt=Point(x=20, y=40))
+        sizedPanel: SizedPanel = self.GetContentsPane()
+        sizedPanel.SetSizerProps(expand=True, proportion=1)
+        sizedPanel.SetSizerType('vertical')
+
+        self.CreateStatusBar(style=STB_DEFAULT_STYLE)  # should always do this when there's a resize border
+
+        self._recordButton: BitmapButton = cast(BitmapButton, None)
+        self._stopButton:   BitmapButton = cast(BitmapButton, None)
+        self._saveButton:   BitmapButton = cast(BitmapButton, None)
+
+        self._recordText: TextCtrl = self._layoutRecordTextControl(sizedPanel)
+        self._layoutRecorderButtons(sizedPanel)
+
+        self._mouseListener:    MouseListener    = MouseListener(on_click=self._onClickListener)
+        self._keyboardListener: KeyboardListener = KeyboardListener(on_press=self._onKeyPressListener)
+
+        self._mouseListener.start()
+        self._keyboardListener.start()
+
+        self._recording: bool = False
+
+        self._loadPreamble()
+
+        self.SetAutoLayout(True)
+        self.Show(True)
+        self.Bind(EVT_BUTTON, self._onRecord, self._recordButton)
+        self.Bind(EVT_BUTTON, self._onStop,   self._stopButton)
+        self.Bind(EVT_BUTTON, self._onSave,    self._saveButton)
+
+        self.Bind(EVT_CLOSE, self.Close)
+
+    def Close(self, force: bool = False) -> bool:
+        """
+        Closing handler overload. Save files and ask for confirmation.
+        """
+        self.Destroy()
+        return True
+
+    # noinspection PyUnusedLocal
+    def _onRecord(self, event: CommandEvent):
+
+        self._recording = True
+        self.logger.warning(f'Start recording')
+
+    # noinspection PyUnusedLocal
+    def _onStop(self, event: CommandEvent):
+        """
+        Do not really stop;  Just tell the listeners to not record
+        Args:
+            event:
+        """
+        self._recording = False
+
+    # noinspection PyUnusedLocal
+    def _onSave(self, event: CommandEvent):
+        wildCard: str = f'Executable Script (*.py) |*.py'
+
+        fileName: str = FileSelector("Choose output script name",
+                                     default_filename='transcribed.py',
+                                     wildcard=wildCard,
+                                     flags=FD_SAVE | FD_OVERWRITE_PROMPT | FD_CHANGE_DIR
+                                     )
+
+        self._recordText.SaveFile(fileName)
+
+    def _onClickListener(self, floatX: float, floatY: float, button: Button, pressed: bool):
+
+        if self._recording is True:
+            x: int = round(floatX)
+            y: int = round(floatY)
+            if pressed is True:
+                if button.name == "left":
+                    clickCmd: str = f"{CLICK}(x={x}, y={y})"
+                else:
+                    clickCmd = f'{CLICK}(x={x}, y={y}, button="right")'
+
+                print(clickCmd)
+                # self._recordText.AppendText(f'{clickCmd}{osLineSep}')
+                #
+                # Avoid:  Trace/BPT trap: 5
+                #
+                wxCallAfter(self._recordText.AppendText, f'{clickCmd}{osLineSep}')
+
+    def _onKeyPressListener(self, key):
+        if self._recording is True:
+            try:
+                pressCmd: str = f"{PRESS}('{key.name}')"
+                print(f"{PRESS}('{key.name}')")
+                wxCallAfter(self._recordText.AppendText, f'{pressCmd}{osLineSep}')
+
+            except AttributeError:
+                pressCmd = f"{PRESS}('{key}')"
+                wxCallAfter(self._recordText.AppendText, f'{pressCmd}{osLineSep}')
+
+    def _loadPreamble(self):
+
+        for line in SCRIPT_PREAMBLE:
+            self._recordText.AppendText(line)
+
+    def _getFrameStyle(self) -> int:
+        """
+        wxPython 4.2.4 update:  using FRAME_TOOL_WINDOW causes the title to be above the toolbar
+        in production mode use FRAME_TOOL_WINDOW
+
+        Note:  Getting the environment variable from the plist dictionary (LSEnvironment) only works
+        by double-clicking on the built application;  We simulate that with a PyCharm custom Run/Debug
+        configuration
+
+        Returns:  An appropriate frame style
+        """
+        # appModeStr: Optional[str] = osGetEnv(DiagrammerTypes.APP_MODE)
+
+        # if appModeStr is None:
+        #     appMode: bool = False
+        # else:
+        #     appMode = SecureConversions.secureBoolean(appModeStr)
+        frameStyle: int  = DEFAULT_FRAME_STYLE | FRAME_FLOAT_ON_PARENT
+        # if appMode is True:
+        #     frameStyle = frameStyle | FRAME_TOOL_WINDOW
+
+        return frameStyle
+
+    def _layoutRecordTextControl(self, sizedPanel: SizedPanel):
+
+        textControl: TextCtrl = TextCtrl(sizedPanel, ID_ANY, size=Size(-1, -1), style=TE_MULTILINE)
+        textControl.SetSizerProps(expand=True, proportion=2)
+
+        #
+        # The code I generate does not work with smart quotes
+        #
+        textControl.OSXDisableAllSmartSubstitutions()
+        return textControl
+
+    def _layoutRecorderButtons(self, sizedPanel: SizedPanel):
+        buttonPanel: SizedStaticBox = SizedStaticBox(sizedPanel, label='', style=BORDER_THEME)
+        buttonPanel.SetSizerProps(expand=True, proportion=1)
+        buttonPanel.SetSizerType('horizontal')
+
+        self._recordButton = BitmapButton(parent=buttonPanel, id=ID_ANY, bitmap=recordImage.GetBitmap())
+        self._stopButton   = BitmapButton(parent=buttonPanel, id=ID_ANY, bitmap=stopImage.GetBitmap())
+        self._saveButton   = BitmapButton(parent=buttonPanel, id=ID_ANY, bitmap=saveImage.GetBitmap())

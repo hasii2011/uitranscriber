@@ -1,0 +1,23 @@
+wheel==0.44.0
+# https://github.com/ronaldoussoren/py2app/issues/538#issuecomment-3193389958
+# Don't upgrade past this version as 70.x.x does not work
+# setuptools==70.1.1
+setuptools==70.3.0
+
+# the following necessary when building the
+# application with py2App
+chardet==5.2.0
+
+py2app==0.28.9
+
+mypy==1.19.0
+html-testRunner~=1.2.1
+
+# So Circle CI works
+
+buildlackey==2.0.0
+
+codeallybasic==1.30.0
+pyautogui==0.9.54
+pynput==1.8.1
+wxPython==4.2.4

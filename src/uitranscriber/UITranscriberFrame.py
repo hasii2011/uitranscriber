@@ -1,4 +1,5 @@
 
+from typing import Dict
 from typing import List
 from typing import cast
 
@@ -34,6 +35,8 @@ from wx.lib.sized_controls import SizedStaticBox
 
 from pynput.mouse import Button
 from pynput.mouse import Listener as MouseListener
+from pynput.keyboard import Key
+from pynput.keyboard import KeyCode
 from pynput.keyboard import Listener as KeyboardListener
 
 from uitranscriber.resources.stop import embeddedImage as stopImage
@@ -41,7 +44,7 @@ from uitranscriber.resources.save import embeddedImage as saveImage
 from uitranscriber.resources.record import embeddedImage as recordImage
 
 CLICK: str = 'click'
-PRESS: str = 'keyDown'
+PRESS: str = 'press'
 SCRIPT_PREAMBLE: List[str] = [
     f'#!/usr/bin/env python{osLineSep}',
     f'# /// script{osLineSep}'
@@ -53,11 +56,31 @@ SCRIPT_PREAMBLE: List[str] = [
     f'from pyautogui import click{osLineSep}',
     f'{osLineSep}'
     f'{osLineSep}'
-    f'{osLineSep}'
     f'pyautogui.PAUSE = 0.5{osLineSep}'
     f'{osLineSep}'
 ]
 
+#
+# Maps pynput keys to PyAutoGUI keys
+# noinspection SpellCheckingInspection
+SPECIAL_KEY_MAP: Dict[KeyCode, str] = {
+    Key.backspace: 'backspace',
+    Key.delete:    'delete',
+    Key.down:   'down',
+    Key.end:    'end',
+    Key.enter:  'enter',
+    Key.esc: '   esc',
+    Key.f1:  'f1',  Key.f2:  'f2',  Key.f3:  'f3',  Key.f4:  'f4',  Key.f5:  'f5',
+    Key.f6:  'f6',  Key.f7:  'f7',  Key.f8:  'f8',  Key.f9:  'f9',  Key.f10: 'f10',
+    Key.f11: 'f11', Key.f12: 'f12', Key.f13: 'f13', Key.f14: 'f14', Key.f15: 'f15',
+
+    Key.home: 'home', Key.left: 'left',
+    Key.page_down: 'pagedown', Key.page_up: 'pageup',
+    Key.right: 'right',
+    Key.space: 'space',
+    Key.tab:   'tab',
+    Key.up:    'up',
+}
 class UITranscriberFrame(SizedFrame):
 
     def __init__(self):
@@ -132,7 +155,16 @@ class UITranscriberFrame(SizedFrame):
         self._recordText.SaveFile(fileName)
 
     def _onClickListener(self, floatX: float, floatY: float, button: Button, pressed: bool):
+        """
+        Calls to this method come from a thread running outside the UI event loop.  Use the
+        wxPython CallAfter method to ensure updates to the UI occur within the UI event loop
 
+        Args:
+            floatX:
+            floatY:
+            button:
+            pressed:
+        """
         if self._recording is True:
             x: int = round(floatX)
             y: int = round(floatY)
@@ -142,23 +174,35 @@ class UITranscriberFrame(SizedFrame):
                 else:
                     clickCmd = f'{CLICK}(x={x}, y={y}, button="right")'
 
-                print(clickCmd)
-                # self._recordText.AppendText(f'{clickCmd}{osLineSep}')
-                #
-                # Avoid:  Trace/BPT trap: 5
-                #
+                self.logger.debug(clickCmd)
                 wxCallAfter(self._recordText.AppendText, f'{clickCmd}{osLineSep}')
 
-    def _onKeyPressListener(self, key):
-        if self._recording is True:
-            try:
-                pressCmd: str = f"{PRESS}('{key.name}')"
-                print(f"{PRESS}('{key.name}')")
-                wxCallAfter(self._recordText.AppendText, f'{pressCmd}{osLineSep}')
+    def _onKeyPressListener(self, pressedKey: KeyCode):
+        """
+        Calls to this method come from a thread running outside the UI event loop.  Use the
+        wxPython CallAfter method to ensure updates to the UI occur within the UI event loop
 
-            except AttributeError:
-                pressCmd = f"{PRESS}('{key}')"
-                wxCallAfter(self._recordText.AppendText, f'{pressCmd}{osLineSep}')
+        Args:
+            pressedKey:
+        """
+        if self._recording is True:
+
+            if isinstance(pressedKey, KeyCode):
+                keyCode: KeyCode = cast(KeyCode, pressedKey)
+                keyStr: str = f"'{keyCode.char}'"
+                self.logger.debug(f'{keyStr}')
+            else:
+                funkyKeyCode: KeyCode = cast(KeyCode, pressedKey)
+                self.logger.debug(f'{funkyKeyCode=}')
+                try:
+                    keyStr = SPECIAL_KEY_MAP[funkyKeyCode]
+                except KeyError as ke:
+                    self.logger.debug(f'{ke=}')
+                    keyStr = 'unhandled'
+
+            pressCmd = f"{PRESS}('{keyStr}')"
+            self.logger.debug(f'{pressCmd}')
+            wxCallAfter(self._recordText.AppendText, f'{pressCmd}{osLineSep}')
 
     def _loadPreamble(self):
 

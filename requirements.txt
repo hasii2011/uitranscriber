@@ -18,6 +18,5 @@ html-testRunner~=1.2.1
 buildlackey==2.0.0
 
 codeallybasic==1.30.0
-pyautogui==0.9.54
 pynput==1.8.1
 wxPython==4.2.4

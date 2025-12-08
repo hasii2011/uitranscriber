@@ -35,6 +35,7 @@ from wx.lib.sized_controls import SizedStaticBox
 
 from pynput.mouse import Button
 from pynput.mouse import Listener as MouseListener
+
 from pynput.keyboard import Key
 from pynput.keyboard import KeyCode
 from pynput.keyboard import Listener as KeyboardListener
@@ -82,8 +83,15 @@ SPECIAL_KEY_MAP: Dict[KeyCode, str] = {
     Key.up:    'up',
 }
 class UITranscriberFrame(SizedFrame):
+    """
+    Contains the simplified UI and all the UI handlers;  Also, contains
+    the pynput listeners
+    """
 
     def __init__(self):
+        """
+        Start the pynput listeners here
+        """
         self.logger: Logger = getLogger(__name__)
 
         super().__init__(parent=None, title='UI Transcriber', size=Size(width=450, height=300), style=self._getFrameStyle())
@@ -108,8 +116,16 @@ class UITranscriberFrame(SizedFrame):
         self._mouseListener.start()
         self._keyboardListener.start()
 
-        self._recording: bool = False
-
+        self._recording:      bool = False
+        """
+        We really never stop the listeners.  We just stop handling anything
+        when the recording flag is False
+        """
+        self._keyboardBuffer: str  = ''
+        """
+        The single character presses are buffered to generate a single PyAutoGUI press command
+        """
+        self._lastInsertionPosition: int = 0
         self._loadPreamble()
 
         self.SetAutoLayout(True)
@@ -156,6 +172,8 @@ class UITranscriberFrame(SizedFrame):
 
     def _onClickListener(self, floatX: float, floatY: float, button: Button, pressed: bool):
         """
+        Check the keyboard buffer.  If it is non-empty generate the press command
+
         Calls to this method come from a thread running outside the UI event loop.  Use the
         wxPython CallAfter method to ensure updates to the UI occur within the UI event loop
 
@@ -166,6 +184,11 @@ class UITranscriberFrame(SizedFrame):
             pressed:
         """
         if self._recording is True:
+            if len(self._keyboardBuffer) > 0:
+                pressCmd = f"{PRESS}('{self._keyboardBuffer}')"
+                wxCallAfter(self._recordCommand, f'{pressCmd}{osLineSep}')
+                self._keyboardBuffer = ''
+
             x: int = round(floatX)
             y: int = round(floatY)
             if pressed is True:
@@ -179,6 +202,12 @@ class UITranscriberFrame(SizedFrame):
 
     def _onKeyPressListener(self, pressedKey: KeyCode):
         """
+        We will buffer normal characters so as not to generate a bunch of single character
+        press commands
+
+        Whenever, the click listener activates it checks the keyboard buffer.  If non-empty,
+        it generates the press command
+
         Calls to this method come from a thread running outside the UI event loop.  Use the
         wxPython CallAfter method to ensure updates to the UI occur within the UI event loop
 
@@ -189,8 +218,9 @@ class UITranscriberFrame(SizedFrame):
 
             if isinstance(pressedKey, KeyCode):
                 keyCode: KeyCode = cast(KeyCode, pressedKey)
-                keyStr: str = f"'{keyCode.char}'"
-                self.logger.debug(f'{keyStr}')
+                keyStr: str = f'{keyCode.char}'
+                self._keyboardBuffer = f'{self._keyboardBuffer}{keyStr}'
+                self.logger.debug(f'keyboard buffer: {self._keyboardBuffer}')
             else:
                 funkyKeyCode: KeyCode = cast(KeyCode, pressedKey)
                 self.logger.debug(f'{funkyKeyCode=}')
@@ -200,9 +230,9 @@ class UITranscriberFrame(SizedFrame):
                     self.logger.debug(f'{ke=}')
                     keyStr = 'unhandled'
 
-            pressCmd = f"{PRESS}('{keyStr}')"
-            self.logger.debug(f'{pressCmd}')
-            wxCallAfter(self._recordText.AppendText, f'{pressCmd}{osLineSep}')
+                pressCmd = f"{PRESS}('{keyStr}')"
+                self.logger.debug(f'{pressCmd}')
+                wxCallAfter(self._recordCommand, f'{pressCmd}{osLineSep}')
 
     def _loadPreamble(self):
 
@@ -241,6 +271,7 @@ class UITranscriberFrame(SizedFrame):
         # The code I generate does not work with smart quotes
         #
         textControl.OSXDisableAllSmartSubstitutions()
+        textControl.SetEditable(False)
         return textControl
 
     def _layoutRecorderButtons(self, sizedPanel: SizedPanel):
@@ -251,3 +282,10 @@ class UITranscriberFrame(SizedFrame):
         self._recordButton = BitmapButton(parent=buttonPanel, id=ID_ANY, bitmap=recordImage.GetBitmap())
         self._stopButton   = BitmapButton(parent=buttonPanel, id=ID_ANY, bitmap=stopImage.GetBitmap())
         self._saveButton   = BitmapButton(parent=buttonPanel, id=ID_ANY, bitmap=saveImage.GetBitmap())
+
+    def _recordCommand(self, recordedCommand: str):
+
+        self._lastInsertionPosition = self._recordText.GetLastPosition()
+
+        self.logger.info(f'{self._lastInsertionPosition=}')
+        self._recordText.AppendText(recordedCommand)

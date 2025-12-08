@@ -22,7 +22,7 @@
         }
     },
     "loggers": {
-        "pyautoguirecorder": {
+        "uitranscriber": {
             "level": "INFO",
             "handlers": ["consoleHandler"],
             "propagate": "False"

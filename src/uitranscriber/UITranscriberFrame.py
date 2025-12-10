@@ -45,7 +45,11 @@ from uitranscriber.resources.save import embeddedImage as saveImage
 from uitranscriber.resources.record import embeddedImage as recordImage
 
 CLICK: str = 'click'
+WRITE: str = 'write'
 PRESS: str = 'press'
+
+PRESSES_ARGUMENT: str = 'presses'
+
 SCRIPT_PREAMBLE: List[str] = [
     f'#!/usr/bin/env python{osLineSep}',
     f'# /// script{osLineSep}'
@@ -63,6 +67,7 @@ SCRIPT_PREAMBLE: List[str] = [
 
 #
 # Maps pynput keys to PyAutoGUI keys
+# noinspection PyTypeChecker
 # noinspection SpellCheckingInspection
 SPECIAL_KEY_MAP: Dict[KeyCode, str] = {
     Key.backspace: 'backspace',
@@ -117,6 +122,10 @@ class UITranscriberFrame(SizedFrame):
         self._keyboardListener.start()
 
         self._recording:      bool = False
+
+        self._keyCodeMode:        bool = False
+        self._repeatKeyCodeCount: int = 0
+        self._repeatedKeyCode:    str = ''
         """
         We really never stop the listeners.  We just stop handling anything
         when the recording flag is False
@@ -185,9 +194,11 @@ class UITranscriberFrame(SizedFrame):
         """
         if self._recording is True:
             if len(self._keyboardBuffer) > 0:
-                pressCmd = f"{PRESS}('{self._keyboardBuffer}')"
-                wxCallAfter(self._recordCommand, f'{pressCmd}{osLineSep}')
+                writeCmd: str = f"{WRITE}('{self._keyboardBuffer}')"
+                wxCallAfter(self._recordCommand, f'{writeCmd}{osLineSep}')
                 self._keyboardBuffer = ''
+            if self._keyCodeMode is True:
+                self._unBufferKeyCode()
 
             x: int = round(floatX)
             y: int = round(floatY)
@@ -205,6 +216,8 @@ class UITranscriberFrame(SizedFrame):
         We will buffer normal characters so as not to generate a bunch of single character
         press commands
 
+        Will count repeated key code so as not to generate spurious 'press' commands
+
         Whenever, the click listener activates it checks the keyboard buffer.  If non-empty,
         it generates the press command
 
@@ -217,22 +230,21 @@ class UITranscriberFrame(SizedFrame):
         if self._recording is True:
 
             if isinstance(pressedKey, KeyCode):
+
                 keyCode: KeyCode = cast(KeyCode, pressedKey)
-                keyStr: str = f'{keyCode.char}'
+                keyStr:  str     = f'{keyCode.char}'
                 self._keyboardBuffer = f'{self._keyboardBuffer}{keyStr}'
                 self.logger.debug(f'keyboard buffer: {self._keyboardBuffer}')
             else:
-                funkyKeyCode: KeyCode = cast(KeyCode, pressedKey)
-                self.logger.debug(f'{funkyKeyCode=}')
                 try:
-                    keyStr = SPECIAL_KEY_MAP[funkyKeyCode]
+                    self._handleKeyCode(pressedKey=pressedKey)
                 except KeyError as ke:
-                    self.logger.debug(f'{ke=}')
-                    keyStr = 'unhandled'
+                    self.logger.warning(f'unhandled KeyCode: {ke=}')
 
-                pressCmd = f"{PRESS}('{keyStr}')"
-                self.logger.debug(f'{pressCmd}')
-                wxCallAfter(self._recordCommand, f'{pressCmd}{osLineSep}')
+                    keyStr   = 'unhandled'
+                    pressCmd = f"{WRITE}('{keyStr}')"
+                    self.logger.debug(f'{pressCmd}')
+                    wxCallAfter(self._recordCommand, f'{pressCmd}{osLineSep}')
 
     def _loadPreamble(self):
 
@@ -283,9 +295,32 @@ class UITranscriberFrame(SizedFrame):
         self._stopButton   = BitmapButton(parent=buttonPanel, id=ID_ANY, bitmap=stopImage.GetBitmap())
         self._saveButton   = BitmapButton(parent=buttonPanel, id=ID_ANY, bitmap=saveImage.GetBitmap())
 
+    def _unBufferKeyCode(self):
+        pressCmd: str = f"{PRESS}('{self._repeatedKeyCode}', {PRESSES_ARGUMENT}={self._repeatKeyCodeCount})"
+        self._resetKeyCodeMode()
+        wxCallAfter(self._recordText.AppendText, f'{pressCmd}{osLineSep}')
+
+    def _handleKeyCode(self, pressedKey: KeyCode):
+
+        self.logger.debug(f'{pressedKey=}')
+
+        keyStr: str = SPECIAL_KEY_MAP[pressedKey]
+        self.logger.info(f'Special Key {keyStr}')
+
+        if pressedKey == Key.backspace:
+            self._keyCodeMode = True
+            self._repeatedKeyCode = keyStr
+            self._repeatKeyCodeCount += 1
+
+    def _resetKeyCodeMode(self):
+
+        self._repeatKeyCodeCount = 0
+        self._repeatedKeyCode    = ''
+        self._keyCodeMode        = False
+
     def _recordCommand(self, recordedCommand: str):
 
         self._lastInsertionPosition = self._recordText.GetLastPosition()
 
-        self.logger.info(f'{self._lastInsertionPosition=}')
+        self.logger.debug(f'{self._lastInsertionPosition=}')
         self._recordText.AppendText(recordedCommand)

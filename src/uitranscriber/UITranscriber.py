@@ -59,6 +59,7 @@ class UITranscriber(App):
 
 if __name__ == '__main__':
 
+    print('Start us')
     testApp: UITranscriber = UITranscriber()
 
     testApp.MainLoop()

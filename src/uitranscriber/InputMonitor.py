@@ -188,6 +188,43 @@ class InputMonitor:
         for line in SCRIPT_PREAMBLE:
             self._reportCB(line)
 
+    def _handleKeyCode(self, pressedKey: KeyCode):
+        """
+        We will keep buffering aka counting the non-alphanumeric
+        keys until it is different than the one we are buffering
+
+
+        Args:
+            pressedKey:
+
+        Exception: KeyError - When the SPECIAL_KEY_MAP does not contain a translation for PyAutoGUI
+        """
+        self.logger.debug(f'{pressedKey=}')
+
+        keyStr: str = SPECIAL_KEY_MAP[pressedKey]
+        msg: str = (
+            f'Special Key {keyStr} '
+            f'{self._keyCodeMode=} '
+            f'{self._repeatedKeyCode=} '
+            f'{self._repeatKeyCodeCount=}'
+        )
+        self.logger.info(msg)
+        if self._keyCodeMode is True:
+            #
+            # Still buffering the same one ?
+            #
+            if keyStr != self._repeatedKeyCode:
+                self._unBufferKeyCode()
+                self._resetKeyCodeMode()
+
+        HANDLED_KEY_CODE: List[Key] = [
+            Key.backspace, Key.enter, Key.up, Key.down, Key.left, Key.right
+        ]
+        if pressedKey in HANDLED_KEY_CODE:
+            self._keyCodeMode = True
+            self._repeatedKeyCode = keyStr
+            self._repeatKeyCodeCount += 1
+
     def _unBufferKeyCode(self):
         pressCmd: str = f"{PRESS}('{self._repeatedKeyCode}', {PRESSES_ARGUMENT}={self._repeatKeyCodeCount})"
         self._resetKeyCodeMode()
@@ -198,15 +235,3 @@ class InputMonitor:
         self._repeatKeyCodeCount = 0
         self._repeatedKeyCode    = ''
         self._keyCodeMode        = False
-
-    def _handleKeyCode(self, pressedKey: KeyCode):
-
-        self.logger.debug(f'{pressedKey=}')
-
-        keyStr: str = SPECIAL_KEY_MAP[pressedKey]
-        self.logger.info(f'Special Key {keyStr}')
-
-        if pressedKey == Key.backspace:
-            self._keyCodeMode = True
-            self._repeatedKeyCode = keyStr
-            self._repeatKeyCodeCount += 1

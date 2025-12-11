@@ -106,7 +106,7 @@ class InputMonitor:
         """
         self._recording:             bool = False
         self._lastInsertionPosition: int  = 0
-        self._loadPreamble()
+        self.loadPreamble()
 
     @property
     def recording(self) -> bool:
@@ -115,6 +115,11 @@ class InputMonitor:
     @recording.setter
     def recording(self, recording: bool):
         self._recording = recording
+
+    def loadPreamble(self):
+
+        for line in SCRIPT_PREAMBLE:
+            self._reportCB(line)
 
     def _onClickListener(self, floatX: float, floatY: float, button: Button, pressed: bool):
         """
@@ -182,11 +187,6 @@ class InputMonitor:
                     pressCmd = f"{WRITE}('{keyStr}')"
                     self.logger.debug(f'{pressCmd}')
                     self._reportCB(f'{pressCmd}{osLineSep}')
-
-    def _loadPreamble(self):
-
-        for line in SCRIPT_PREAMBLE:
-            self._reportCB(line)
 
     def _handleKeyCode(self, pressedKey: KeyCode):
         """

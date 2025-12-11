@@ -32,6 +32,7 @@ from uitranscriber.InputMonitor import InputMonitor
 from uitranscriber.resources.stop import embeddedImage as stopImage
 from uitranscriber.resources.save import embeddedImage as saveImage
 from uitranscriber.resources.record import embeddedImage as recordImage
+from uitranscriber.resources.clear import embeddedImage as clearImage
 
 
 class UITranscriberFrame(SizedFrame):
@@ -56,6 +57,7 @@ class UITranscriberFrame(SizedFrame):
         self._recordButton: BitmapButton = cast(BitmapButton, None)
         self._stopButton:   BitmapButton = cast(BitmapButton, None)
         self._saveButton:   BitmapButton = cast(BitmapButton, None)
+        self._clearButton:  BitmapButton = cast(BitmapButton, None)
 
         self._recordText: TextCtrl = self._layoutRecordTextControl(sizedPanel)
         self._layoutRecorderButtons(sizedPanel)
@@ -68,7 +70,8 @@ class UITranscriberFrame(SizedFrame):
         self.Show(True)
         self.Bind(EVT_BUTTON, self._onRecord, self._recordButton)
         self.Bind(EVT_BUTTON, self._onStop,   self._stopButton)
-        self.Bind(EVT_BUTTON, self._onSave,    self._saveButton)
+        self.Bind(EVT_BUTTON, self._onSave,   self._saveButton)
+        self.Bind(EVT_BUTTON, self._onClear,  self._clearButton)
 
         self.Bind(EVT_CLOSE, self.Close)
 
@@ -111,6 +114,11 @@ class UITranscriberFrame(SizedFrame):
                                      )
 
         self._recordText.SaveFile(fileName)
+
+    # noinspection PyUnusedLocal
+    def _onClear(self, event: CommandEvent):
+        self._recordText.Clear()
+        self._inputMonitor.loadPreamble()
 
     def _getFrameStyle(self) -> int:
         """
@@ -155,6 +163,7 @@ class UITranscriberFrame(SizedFrame):
         self._recordButton = BitmapButton(parent=buttonPanel, id=ID_ANY, bitmap=recordImage.GetBitmap())
         self._stopButton   = BitmapButton(parent=buttonPanel, id=ID_ANY, bitmap=stopImage.GetBitmap())
         self._saveButton   = BitmapButton(parent=buttonPanel, id=ID_ANY, bitmap=saveImage.GetBitmap())
+        self._clearButton  = BitmapButton(parent=buttonPanel, id=ID_ANY, bitmap=clearImage.GetBitmap())
 
     def _listenReporting(self, cmd: str):
         wxCallAfter(self._recordCommand, cmd)
@@ -177,7 +186,9 @@ class UITranscriberFrame(SizedFrame):
             self._recordButton.Enable(enable=False)
             self._stopButton.Enable(enable=True)
             self._saveButton.Enable(enable=False)
+            self._clearButton.Enable(enable=False)
         else:
             self._recordButton.Enable(enable=True)
             self._stopButton.Enable(enable=False)
             self._saveButton.Enable(enable=True)
+            self._clearButton.Enable(enable=True)

@@ -34,7 +34,7 @@
     "loggers": {
         "uitranscriber": {
             "level": "INFO",
-            "handlers": ["consoleHandler"],
+            "handlers": ["rotatingFileHandler"],
             "propagate": "False"
         }
     }

@@ -38,7 +38,6 @@ class UITranscriberFrame(SizedFrame):
     """
     Contains the simplified UI and all the UI handlers;
     """
-
     def __init__(self):
         """
         Start the Input Monitor here
@@ -62,6 +61,8 @@ class UITranscriberFrame(SizedFrame):
         self._layoutRecorderButtons(sizedPanel)
 
         self._inputMonitor: InputMonitor = InputMonitor(reportCB=self._listenReporting)
+        self._inputMonitor.recording = False
+        self._setButtonState()
 
         self.SetAutoLayout(True)
         self.Show(True)
@@ -80,9 +81,14 @@ class UITranscriberFrame(SizedFrame):
 
     # noinspection PyUnusedLocal
     def _onRecord(self, event: CommandEvent):
-
+        """
+        Do not really start;  Just tell the listeners to record
+        Args:
+            event:
+        """
         self._inputMonitor.recording = True
         self.logger.warning(f'Start recording')
+        self._setButtonState()
 
     # noinspection PyUnusedLocal
     def _onStop(self, event: CommandEvent):
@@ -92,6 +98,7 @@ class UITranscriberFrame(SizedFrame):
             event:
         """
         self._inputMonitor.recording = False
+        self._setButtonState()
 
     # noinspection PyUnusedLocal
     def _onSave(self, event: CommandEvent):
@@ -158,3 +165,19 @@ class UITranscriberFrame(SizedFrame):
 
         self.logger.debug(f'{self._lastInsertionPosition=}')
         self._recordText.AppendText(recordedCommand)
+
+    def _setButtonState(self):
+        """
+        if recording we can only `Stop` the recording
+        if not recording we can `Save` the script o `Start` the recording
+        """
+
+        if self._inputMonitor.recording is True:
+
+            self._recordButton.Enable(enable=False)
+            self._stopButton.Enable(enable=True)
+            self._saveButton.Enable(enable=False)
+        else:
+            self._recordButton.Enable(enable=True)
+            self._stopButton.Enable(enable=False)
+            self._saveButton.Enable(enable=True)
